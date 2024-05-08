@@ -26,7 +26,7 @@ This Python script allows you to download images from Google Custom Search API b
 2. Navigate to the project directory:
 
    ```bash
-   cd image-downloader
+   cd path_to_image_downloader
    ```
 
 3. Install the required Python packages using pip:
