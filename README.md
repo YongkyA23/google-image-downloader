@@ -1,6 +1,3 @@
-I apologize for the mistake. Here's the complete README content in Markdown format:
-
-```markdown
 # Image Downloader from Google Custom Search API
 
 This Python script allows you to download images from Google Custom Search API based on queries provided in an Excel file. It handles error handling, retries, and avoids re-downloading images that have already been downloaded.
