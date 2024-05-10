@@ -14,6 +14,7 @@ This Python script allows you to download images from Google Custom Search API b
 - `google-api-python-client`
 - `requests` 
 - `pandas`
+- `pillow`
 
 ## Installation
 
