@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import re
 import time
+from PIL import Image
 
 # Google Custom Search API key and search engine ID
 API_KEY = "YOUR_API_KEY"
@@ -23,7 +24,7 @@ def save_downloaded_images(downloaded_images, filename):
             file.write(image_filename + '\n')
 
 # Function to download images with error handling and retry
-def download_images(query, num_images, directory, downloaded_images):
+def download_images(query, num_images, directory, downloaded_images, min_width=800, min_height=800):
     # Sanitize query to remove invalid characters from filename
     sanitized_query = re.sub(r'[\\/*?:"<>|]', '', query)
     
@@ -52,10 +53,17 @@ def download_images(query, num_images, directory, downloaded_images):
                 image_filename = f"{sanitized_query}_{i}.jpg"
                 if image_filename not in downloaded_images:
                     response = requests.get(image_url, stream=True)
-                    with open(os.path.join(directory, image_filename), 'wb') as file:
-                        file.write(response.content)
-                    print(f"Downloaded image {i+1}/{num_images} for query: {query}")
-                    downloaded_images.add(image_filename)  # Add filename to set of downloaded images
+                    
+                    # Check image size
+                    image = Image.open(response.raw)
+                    width, height = image.size
+                    if width >= min_width and height >= min_height:
+                        with open(os.path.join(directory, image_filename), 'wb') as file:
+                            file.write(response.content)
+                        print(f"Downloaded image {i+1}/{num_images} for query: {query}")
+                        downloaded_images.add(image_filename)  # Add filename to set of downloaded images
+                    else:
+                        print(f"Skipping image {i+1}/{num_images} for query: {query}. Image size too small.")
                 else:
                     print(f"Skipping already downloaded image: {image_filename}")
             
