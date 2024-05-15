@@ -4,11 +4,12 @@ import os
 import pandas as pd
 import re
 import time
-from PIL import Image
+import json
+import random
 
 # Google Custom Search API key and search engine ID
-API_KEY = "YOUR_API_KEY"
-SEARCH_ENGINE_ID = "YOUR_SEARCH_ENGINE_ID"
+API_KEY = "AIzaSyAMuJxG40253IMdVzBV3oZH5KSMS6yN824"
+SEARCH_ENGINE_ID = "42645c67cc1574e4e"
 
 def load_downloaded_images(filename):
     downloaded_images = set()
@@ -24,7 +25,7 @@ def save_downloaded_images(downloaded_images, filename):
             file.write(image_filename + '\n')
 
 # Function to download images with error handling and retry
-def download_images(query, num_images, directory, downloaded_images, min_width=800, min_height=800):
+def download_images(query, num_images, directory, downloaded_images, log_filename):
     # Sanitize query to remove invalid characters from filename
     sanitized_query = re.sub(r'[\\/*?:"<>|]', '', query)
     
@@ -47,37 +48,51 @@ def download_images(query, num_images, directory, downloaded_images, min_width=8
                 num=num_images
             ).execute().get('items', [])
             
-            # Download images
+            # Download images and log information
             for i, result in enumerate(search_results):
                 image_url = result['link']
                 image_filename = f"{sanitized_query}_{i}.jpg"
-                if image_filename not in downloaded_images:
-                    response = requests.get(image_url, stream=True)
-                    
-                    # Check image size
-                    image = Image.open(response.raw)
-                    width, height = image.size
-                    if width >= min_width and height >= min_height:
-                        with open(os.path.join(directory, image_filename), 'wb') as file:
-                            file.write(response.content)
-                        print(f"Downloaded image {i+1}/{num_images} for query: {query}")
-                        downloaded_images.add(image_filename)  # Add filename to set of downloaded images
+                
+                # Check if image dimensions meet the minimum criteria
+                if 'image' in result and 'width' in result['image'] and 'height' in result['image']:
+                    width = result['image']['width']
+                    height = result['image']['height']
+                    if width >= 500 and height >= 500:
+                        if image_filename not in downloaded_images:
+                            response = requests.get(image_url, stream=True)
+                            if response.status_code == 200:
+                                with open(os.path.join(directory, image_filename), 'wb') as file:
+                                    file.write(response.content)
+                                print(f"Downloaded image {i+1}/{num_images} for query: {query}")
+                                downloaded_images.add(image_filename)  # Add filename to set of downloaded images
+                            else:
+                                print(f"Failed to download image {i+1}/{num_images} for query: {query} - HTTP status code: {response.status_code}")
+                        else:
+                            print(f"Skipping already downloaded image: {image_filename}")
                     else:
-                        print(f"Skipping image {i+1}/{num_images} for query: {query}. Image size too small.")
-                else:
-                    print(f"Skipping already downloaded image: {image_filename}")
+                        print(f"Skipping image {image_url} as it doesn't meet the minimum size criteria")
+                
+                # Introduce a delay of 5 seconds between each image download
+                time.sleep(3)
             
             # Break the loop if download succeeds
             break
         except Exception as e:
             print(f"Error downloading image for query: {query}: {str(e)}")
-            # Retry after a short delay
-            if attempt < max_attempts - 1:
-                print("Retrying download...")
-                time.sleep(2)  # Wait for 2 seconds before retrying
+            # Check if the error is due to rate limit exceeded
+            if 'rateLimitExceeded' in str(e):
+                # If rate limit exceeded, apply exponential backoff
+                delay = 2 ** attempt + random.uniform(0, 1)  # Add some randomness to avoid synchronized retries
+                print(f"Rate limit exceeded. Retrying after {delay} seconds.")
+                time.sleep(delay)
             else:
-                print("Max retry attempts reached. Skipping this query.")
-                break  # Skip to the next query if max attempts reached
+                # For other errors, retry immediately
+                if attempt < max_attempts - 1:
+                    print("Retrying download...")
+                    time.sleep(2)  # Wait for 2 seconds before retrying
+                else:
+                    print("Max retry attempts reached. Skipping this query.")
+                    break  # Skip to the next query if max attempts reached
 
 # Function to process images from Excel file
 def process_images_from_excel(excel_file):
@@ -85,7 +100,7 @@ def process_images_from_excel(excel_file):
     data = pd.read_excel(excel_file)
     
     # Group queries by 'jenis'
-    grouped_queries = data.groupby('jenis')
+    grouped_queries = data.groupby('Jenis')
     
     # Initialize set to store downloaded image filenames
     downloaded_images = load_downloaded_images('downloaded_images.txt')
@@ -101,10 +116,11 @@ def process_images_from_excel(excel_file):
         
         # Iterate through queries in the group
         for index, row in group.iterrows():
-            query = row['nama']  # Read query from 'nama' column
+            query = row['Nama']  # Read query from 'nama' column
             
             # Download images
-            download_images(query, num_images, directory, downloaded_images)
+            log_filename = os.path.join(directory, f"{jenis}_log.json")
+            download_images(query, num_images, directory, downloaded_images, log_filename)
     
     # Save downloaded image filenames
     save_downloaded_images(downloaded_images, 'downloaded_images.txt')
