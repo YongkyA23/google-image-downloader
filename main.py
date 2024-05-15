@@ -6,26 +6,18 @@ import re
 import time
 import json
 import random
+import csv
 
 # Google Custom Search API key and search engine ID
 API_KEY = "AIzaSyAMuJxG40253IMdVzBV3oZH5KSMS6yN824"
 SEARCH_ENGINE_ID = "42645c67cc1574e4e"
 
-def load_downloaded_images(filename):
-    downloaded_images = set()
-    if os.path.exists(filename):
-        with open(filename, 'r') as file:
-            for line in file:
-                downloaded_images.add(line.strip())
-    return downloaded_images
-
-def save_downloaded_images(downloaded_images, filename):
-    with open(filename, 'w') as file:
-        for image_filename in downloaded_images:
-            file.write(image_filename + '\n')
-
 # Function to download images with error handling and retry
-def download_images(query, num_images, directory, downloaded_images, log_filename):
+# Function to download images with error handling and retry
+def download_images(query, num_images, directory, log_filename):
+    # Initialize list to store download log
+    download_log = []
+    
     # Sanitize query to remove invalid characters from filename
     sanitized_query = re.sub(r'[\\/*?:"<>|]', '', query)
     
@@ -58,22 +50,29 @@ def download_images(query, num_images, directory, downloaded_images, log_filenam
                     width = result['image']['width']
                     height = result['image']['height']
                     if width >= 500 and height >= 500:
-                        if image_filename not in downloaded_images:
-                            response = requests.get(image_url, stream=True)
-                            if response.status_code == 200:
-                                with open(os.path.join(directory, image_filename), 'wb') as file:
-                                    file.write(response.content)
-                                print(f"Downloaded image {i+1}/{num_images} for query: {query}")
-                                downloaded_images.add(image_filename)  # Add filename to set of downloaded images
-                            else:
-                                print(f"Failed to download image {i+1}/{num_images} for query: {query} - HTTP status code: {response.status_code}")
+                        response = requests.get(image_url, stream=True)
+                        if response.status_code == 200:
+                            with open(os.path.join(directory, image_filename), 'wb') as file:
+                                file.write(response.content)
+                            print(f"Downloaded image {i+1}/{num_images} for query: {query}")
+                            # Append query and image filename to download log
+                            download_log.append({'query': query, 'filename': image_filename})
                         else:
-                            print(f"Skipping already downloaded image: {image_filename}")
+                            print(f"Failed to download image {i+1}/{num_images} for query: {query} - HTTP status code: {response.status_code}")
                     else:
                         print(f"Skipping image {image_url} as it doesn't meet the minimum size criteria")
                 
                 # Introduce a delay of 5 seconds between each image download
                 time.sleep(3)
+            
+            # Write download log to CSV file
+            with open(log_filename, 'a', newline='') as csvfile:
+                fieldnames = ['query', 'filename']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                # Write header only if the file is empty
+                if os.stat(log_filename).st_size == 0:
+                    writer.writeheader()
+                writer.writerows(download_log)
             
             # Break the loop if download succeeds
             break
@@ -102,28 +101,18 @@ def process_images_from_excel(excel_file):
     # Group queries by 'jenis'
     grouped_queries = data.groupby('Jenis')
     
-    # Initialize set to store downloaded image filenames
-    downloaded_images = load_downloaded_images('downloaded_images.txt')
-    
     # Iterate through each group
     for jenis, group in grouped_queries:
         directory = os.path.join("downloaded_images", jenis)  # Directory based on 'jenis'
         num_images = 1  # Number of images to download (set to 1)
-        
-        # Create directory if it doesn't exist
-        if not os.path.exists(directory):
-            os.makedirs(directory)
         
         # Iterate through queries in the group
         for index, row in group.iterrows():
             query = row['Nama']  # Read query from 'nama' column
             
             # Download images
-            log_filename = os.path.join(directory, f"{jenis}_log.json")
-            download_images(query, num_images, directory, downloaded_images, log_filename)
-    
-    # Save downloaded image filenames
-    save_downloaded_images(downloaded_images, 'downloaded_images.txt')
+            log_filename = os.path.join(directory, f"{jenis}_log.csv")
+            download_images(query, num_images, directory, log_filename)
 
 # Example usage
 if __name__ == "__main__":
