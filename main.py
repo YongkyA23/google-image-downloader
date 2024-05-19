@@ -29,7 +29,7 @@ def download_images(query, num_images, directory, log_filename):
     service = build("customsearch", "v1", developerKey=API_KEY)
     
     # Retry download until it succeeds or max attempts reached
-    max_attempts = 5
+    max_attempts = 1
     for attempt in range(max_attempts):
         try:
             # Perform Google image search
