@@ -13,21 +13,21 @@ API_KEY = "AIzaSyAMuJxG40253IMdVzBV3oZH5KSMS6yN824"
 SEARCH_ENGINE_ID = "42645c67cc1574e4e"
 
 # Function to download images with error handling and retry
-# Function to download images with error handling and retry
 def download_images(query, num_images, directory, log_filename):
     # Initialize list to store download log
     download_log = []
-    
+    json_log = {}
+
     # Sanitize query to remove invalid characters from filename
     sanitized_query = re.sub(r'[\\/*?:"<>|]', '', query)
-    
+
     # Create directory if it doesn't exist
     if not os.path.exists(directory):
         os.makedirs(directory)
-    
+
     # Build the custom search service
     service = build("customsearch", "v1", developerKey=API_KEY)
-    
+
     # Retry download until it succeeds or max attempts reached
     max_attempts = 1
     for attempt in range(max_attempts):
@@ -38,13 +38,18 @@ def download_images(query, num_images, directory, log_filename):
                 cx=SEARCH_ENGINE_ID,
                 searchType='image',
                 num=num_images
-            ).execute().get('items', [])
-            
+            ).execute()
+
+            # Log the JSON response
+            json_log[query] = search_results
+
+            search_results = search_results.get('items', [])
+
             # Download images and log information
             for i, result in enumerate(search_results):
                 image_url = result['link']
                 image_filename = f"{sanitized_query}_{i}.jpg"
-                
+
                 # Check if image dimensions meet the minimum criteria
                 if 'image' in result and 'width' in result['image'] and 'height' in result['image']:
                     width = result['image']['width']
@@ -61,10 +66,10 @@ def download_images(query, num_images, directory, log_filename):
                             print(f"Failed to download image {i+1}/{num_images} for query: {query} - HTTP status code: {response.status_code}")
                     else:
                         print(f"Skipping image {image_url} as it doesn't meet the minimum size criteria")
-                
+
                 # Introduce a delay of 5 seconds between each image download
                 time.sleep(3)
-            
+
             # Write download log to CSV file
             with open(log_filename, 'a', newline='') as csvfile:
                 fieldnames = ['query', 'filename']
@@ -73,7 +78,12 @@ def download_images(query, num_images, directory, log_filename):
                 if os.stat(log_filename).st_size == 0:
                     writer.writeheader()
                 writer.writerows(download_log)
-            
+
+            # Write JSON log to a file
+            json_log_filename = os.path.join(directory, 'json_log.json')
+            with open(json_log_filename, 'w') as jsonfile:
+                json.dump(json_log, jsonfile, indent=4)
+
             # Break the loop if download succeeds
             break
         except Exception as e:
@@ -97,19 +107,19 @@ def download_images(query, num_images, directory, log_filename):
 def process_images_from_excel(excel_file):
     # Read Excel file
     data = pd.read_excel(excel_file)
-    
+
     # Group queries by 'jenis'
     grouped_queries = data.groupby('Jenis')
-    
+
     # Iterate through each group
     for jenis, group in grouped_queries:
         directory = os.path.join("downloaded_images", jenis)  # Directory based on 'jenis'
         num_images = 1  # Number of images to download (set to 1)
-        
+
         # Iterate through queries in the group
         for index, row in group.iterrows():
             query = row['Nama']  # Read query from 'nama' column
-            
+
             # Download images
             log_filename = os.path.join(directory, f"{jenis}_log.csv")
             download_images(query, num_images, directory, log_filename)

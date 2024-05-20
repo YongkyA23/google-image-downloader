@@ -26,3 +26,8 @@
 
 #ingore excel files
 *.xlsx
+
+*.jpg
+*.png
+*.jpeg
+/downloaded_images/
